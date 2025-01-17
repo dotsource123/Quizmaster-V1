@@ -1,0 +1,158 @@
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+db = SQLAlchemy()
+
+# Admin Model (Superuser with root access)
+class Admin(db.Model):
+    __tablename__ = 'admins'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)  # hashed password
+    full_name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    
+    # One-to-many relationship (Admin manages multiple users)
+    users = db.relationship('User', backref='admin', lazy=True)
+    
+    def __init__(self, username, password, full_name, email):
+        self.username = username
+        self.password = password
+        self.full_name = full_name
+        self.email = email
+
+
+# User Model
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)  # hashed password
+    full_name = db.Column(db.String(100), nullable=False)
+    qualification = db.Column(db.String(100))
+    dob = db.Column(db.Date)
+
+    # Foreign key relationship with Admin
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    
+    # One-to-many relationship (User can attempt multiple quizzes)
+    scores = db.relationship('Score', backref='user', lazy=True)
+
+    # Many-to-many relationship (User can select multiple subjects)
+    subjects = db.relationship('Subject', secondary='user_subject', backref='users')
+    
+    def __init__(self, username, password, full_name, qualification, dob, admin_id):
+        self.username = username
+        self.password = password
+        self.full_name = full_name
+        self.qualification = qualification
+        self.dob = dob
+        self.admin_id = admin_id
+
+
+# Association table for many-to-many relationship between User and Subject
+class UserSubject(db.Model):
+    __tablename__ = 'user_subject'
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), primary_key=True)
+
+
+# Subject Model
+class Subject(db.Model):
+    __tablename__ = 'subjects'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    
+    # One-to-many relationship (A subject can have multiple chapters)
+    chapters = db.relationship('Chapter', backref='subject', lazy=True)
+
+    def __init__(self, name, description):
+        self.name = name
+        self.description = description
+
+
+# Chapter Model
+class Chapter(db.Model):
+    __tablename__ = 'chapters'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+
+    # Foreign key to Subject
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    
+    # One-to-many relationship (A chapter can have multiple quizzes)
+    quizzes = db.relationship('Quiz', backref='chapter', lazy=True)
+
+    def __init__(self, name, description, subject_id):
+        self.name = name
+        self.description = description
+        self.subject_id = subject_id
+
+
+# Quiz Model
+class Quiz(db.Model):
+    __tablename__ = 'quizzes'
+    id = db.Column(db.Integer, primary_key=True)
+    date_of_quiz = db.Column(db.DateTime, default=datetime.utcnow)
+    time_duration = db.Column(db.String(5))  # Format hh:mm
+    remarks = db.Column(db.Text)
+    
+    # Foreign key to Chapter
+    chapter_id = db.Column(db.Integer, db.ForeignKey('chapters.id'), nullable=False)
+    
+    # One-to-many relationship (A quiz can have multiple questions)
+    questions = db.relationship('Question', backref='quiz', lazy=True)
+
+    # One-to-many relationship (A quiz can have multiple score entries)
+    scores = db.relationship('Score', backref='quiz', lazy=True)
+
+    def __init__(self, date_of_quiz, time_duration, remarks, chapter_id):
+        self.date_of_quiz = date_of_quiz
+        self.time_duration = time_duration
+        self.remarks = remarks
+        self.chapter_id = chapter_id
+
+
+# Question Model
+class Question(db.Model):
+    __tablename__ = 'questions'
+    id = db.Column(db.Integer, primary_key=True)
+    question_statement = db.Column(db.String(500), nullable=False)
+    option1 = db.Column(db.String(200), nullable=False)
+    option2 = db.Column(db.String(200), nullable=False)
+    option3 = db.Column(db.String(200))
+    option4 = db.Column(db.String(200))
+    correct_option = db.Column(db.String(200), nullable=False)
+    
+    # Foreign key to Quiz
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id'), nullable=False)
+
+    def __init__(self, question_statement, option1, option2, option3, option4, correct_option, quiz_id):
+        self.question_statement = question_statement
+        self.option1 = option1
+        self.option2 = option2
+        self.option3 = option3
+        self.option4 = option4
+        self.correct_option = correct_option
+        self.quiz_id = quiz_id
+
+
+# Score Model
+class Score(db.Model):
+    __tablename__ = 'scores'
+    id = db.Column(db.Integer, primary_key=True)
+    total_scored = db.Column(db.Integer, nullable=False)
+    time_stamp_of_attempt = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Foreign key to Quiz
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id'), nullable=False)
+
+    # Foreign key to User
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    def __init__(self, total_scored, quiz_id, user_id):
+        self.total_scored = total_scored
+        self.quiz_id = quiz_id
+        self.user_id = user_id
